@@ -50,3 +50,18 @@ class TaskRepository:
             cur = conn.execute("INSERT INTO tasks (title, done) VALUES (?, 0)", (title,))
             new_id = cur.lastrowid
         return self.get(new_id)
+
+    def update(self, task_id: int, title: str | None = None, done: bool | None = None) -> dict | None:
+        if self.get(task_id) is None:
+            return None
+        with connect() as conn:
+            if title is not None:
+                conn.execute("UPDATE tasks SET title = ? WHERE id = ?", (title, task_id))
+            if done is not None:
+                conn.execute("UPDATE tasks SET done = ? WHERE id = ?", (int(done), task_id))
+        return self.get(task_id)
+
+    def delete(self, task_id: int) -> bool:
+        with connect() as conn:
+            cur = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        return cur.rowcount > 0

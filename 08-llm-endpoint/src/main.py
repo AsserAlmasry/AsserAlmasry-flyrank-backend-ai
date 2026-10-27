@@ -1,10 +1,14 @@
 """Run:  uvicorn src.main:app --reload --port 8000"""
+import logging
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 load_dotenv()
+# Cost log lines go to stdout as structured JSON (twelve-factor: let the environment route logs).
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 from .routes.enrich import router  # noqa: E402  (after load_dotenv so settings see .env)
 

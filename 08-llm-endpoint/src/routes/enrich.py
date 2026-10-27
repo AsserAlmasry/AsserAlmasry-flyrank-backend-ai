@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from ..llm.client import LLMConfigError, LLMTimeout, LLMUnavailable
-from ..llm.enrich import Unrepairable, enrich as run_enrich
+from ..llm.enrich import Unrepairable, enrich as run_enrich, fallback
 from ..llm.schema import STUB_ANSWER, EnrichInput, EnrichOutput
 
 router = APIRouter()
@@ -23,6 +23,8 @@ def error(status: int, code: str, message: str) -> JSONResponse:
 def enrich(body: EnrichInput):
     if os.getenv("LLM_STUB") == "1":
         return STUB_ANSWER  # build and debug without spending a single model call
+    if os.getenv("LLM_ENABLED", "true").lower() in ("false", "0", "no", "off"):
+        return fallback(body)  # kill switch: someone who is not me can turn the model off without a deploy
     try:
         return run_enrich(body)  # always a validated EnrichOutput: raw model text never reaches the caller
     except Unrepairable as exc:

@@ -59,7 +59,7 @@ def is_retryable(exc: Exception) -> bool:
     return False  # 400, 401, 403, 404, 422...: the same request will fail the same way
 
 
-def complete(client: OpenAI, messages: list[dict], sleep=time.sleep) -> tuple[object, int]:
+def complete(client: OpenAI, messages: list[dict]) -> tuple[object, int]:
     """One logical model call. Returns (response, attempts_used). Raises LLMTimeout / LLMUnavailable / LLMConfigError."""
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -81,5 +81,5 @@ def complete(client: OpenAI, messages: list[dict], sleep=time.sleep) -> tuple[ob
                 wait = ra  # the server said exactly how long: obey it instead of guessing
                 if wait > MAX_RETRY_AFTER_S:
                     raise LLMUnavailable(f"provider asked us to wait {wait:.0f}s; not holding the request that long") from exc
-            sleep(wait)
+            time.sleep(wait)
     raise AssertionError("unreachable")

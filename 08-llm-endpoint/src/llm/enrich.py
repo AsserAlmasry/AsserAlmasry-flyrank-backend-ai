@@ -1,5 +1,6 @@
 """validate input -> build prompt -> call model -> parse + validate -> repair once -> clean JSON or a clear 422."""
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -10,9 +11,20 @@ from pydantic import ValidationError
 
 from .client import complete, make_client, model_name
 from .prompt import PROMPT_VERSION, system_prompt, user_message
-from .schema import EnrichInput, EnrichOutput
+from .schema import Category, EnrichInput, EnrichOutput, QualityFlag
 
 QUARANTINE = Path(__file__).resolve().parents[2] / "logs" / "quarantine.jsonl"
+cost_log = logging.getLogger("llm.cost")
+
+
+def log_call(res, started: float, attempts: int, repair: int, outcome: str) -> None:
+    """One structured line per model call: what it cost and whether it needed a repair."""
+    usage = getattr(res, "usage", None)
+    cost_log.info(json.dumps({
+        "event": "llm_call", "prompt_version": PROMPT_VERSION, "model": model_name(),
+        "input_tokens": getattr(usage, "prompt_tokens", None), "output_tokens": getattr(usage, "completion_tokens", None),
+        "duration_ms": round((time.monotonic() - started) * 1000), "attempts": attempts, "repair": repair,
+        "outcome": outcome}))
 
 
 class Unrepairable(Exception):
@@ -56,9 +68,11 @@ def enrich(inp: EnrichInput, client: OpenAI | None = None) -> EnrichOutput:
     messages = [{"role": "system", "content": system_prompt()},
                 {"role": "user", "content": user_message(inp.title, inp.description)}]
 
-    res, _ = complete(client, messages)
+    t0 = time.monotonic()
+    res, attempts = complete(client, messages)
     raw = res.choices[0].message.content
     result, error = check(raw)
+    log_call(res, t0, attempts, repair=0, outcome="ok" if result else "invalid")
     if result is not None:
         return result
 
@@ -68,11 +82,27 @@ def enrich(inp: EnrichInput, client: OpenAI | None = None) -> EnrichOutput:
         {"role": "user", "content": f"Your previous answer was rejected for this reason: {error}. "
                                     "Return only corrected JSON matching the schema."},
     ]
-    res, _ = complete(client, repair_messages)
+    t1 = time.monotonic()
+    res, attempts = complete(client, repair_messages)
     raw2 = res.choices[0].message.content
     result, error2 = check(raw2)
+    log_call(res, t1, attempts, repair=1, outcome="ok" if result else "quarantined")
     if result is not None:
         return result
 
     quarantine(inp, raw2, f"first: {error} | after repair: {error2}")
     raise Unrepairable(error2)
+
+
+def fallback(inp: EnrichInput) -> EnrichOutput:
+    """Kill-switch answer: deterministic, computed by plain code, no model involved."""
+    words = len((inp.description or "").split())
+    flags = []
+    if not inp.description or not inp.description.strip():
+        flags.append(QualityFlag.missing_description)
+    elif words < 20:
+        flags.append(QualityFlag.very_short_description)
+    if (inp.description or "").rstrip().endswith(("...", "…")):
+        flags.append(QualityFlag.truncated_description)
+    return EnrichOutput(category=Category.other, summary="Enrichment is temporarily disabled.",
+                        quality_flags=flags, confidence=0.0)

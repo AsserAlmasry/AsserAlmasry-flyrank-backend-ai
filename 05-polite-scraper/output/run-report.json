@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-27T09:27:32Z",
+  "finished_at": "2026-10-27T09:27:33Z",
+  "duration_s": 0.94,
+  "catalogue_pages": 3,
+  "unique_urls": 61,
+  "pages_fetched": 1,
+  "cache_hits": 63,
+  "retries": 0,
+  "valid_records": 60,
+  "invalid_records": 0,
+  "failed_pages": 1,
+  "failures": [
+    {
+      "url": "https://books.toscrape.com/catalogue/this-book-does-not-exist_99999/index.html",
+      "stage": "detail",
+      "reason": "HTTP 404"
+    }
+  ]
+}

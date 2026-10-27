@@ -12,6 +12,7 @@ import requests
 USER_AGENT = "FlyRankInternshipA9/1.0 (+https://github.com/AsserAlmasry/flyrank-backend-ai)"
 TIMEOUT_S = 10
 MIN_DELAY_S = 1.0  # brief says >= 0.5 s; we go slower to be extra polite
+RETRY_WAIT_S = 3.0  # one retry, only for timeouts / network errors / 5xx
 
 
 class FetchError(Exception):
@@ -51,7 +52,19 @@ class Fetcher:
         if path.exists() and meta.exists():
             self.stats["cache_hits"] += 1
             return Page(url, path.read_text("utf-8"), json.loads(meta.read_text())["fetched_at"], True)
+        try:
+            return self._fetch(url, path, meta)
+        except FetchError as exc:
+            # Retry ONCE, and only when asking again could help: a timeout, a network blip, or a 5xx.
+            # Never retry 404 (the page does not exist) or 403 (the site said no).
+            retryable = exc.status is None or exc.status >= 500
+            if not retryable:
+                raise
+            self.stats["retries"] = self.stats.get("retries", 0) + 1
+            time.sleep(RETRY_WAIT_S)
+            return self._fetch(url, path, meta)
 
+    def _fetch(self, url: str, path: Path, meta: Path) -> Page:
         wait = MIN_DELAY_S - (time.monotonic() - self._last_request)
         if wait > 0:
             time.sleep(wait)  # only real requests wait: cached pages never leave the computer

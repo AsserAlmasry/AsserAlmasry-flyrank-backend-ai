@@ -100,4 +100,11 @@ def profile(request: Request):
     token = extract_bearer_token(request)
     if token is None:
         return error(401, "Access token required")
-    return {"message": "Token received (not verified yet)"}
+    try:
+        result = new_client().auth.get_user(token)  # Supabase checks signature + expiry
+    except AuthApiError:
+        return error(401, "Invalid or expired token")
+    if result is None or result.user is None:
+        return error(401, "Invalid or expired token")
+    user = result.user
+    return {"id": user.id, "email": user.email, "created_at": str(user.created_at)}

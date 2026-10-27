@@ -1,0 +1,69 @@
+import os
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
+
+from .repository import InMemoryTaskRepository
+from .service import TaskService, ValidationError
+
+app = FastAPI(title="Task API (in-memory)", version="3.0")
+service = TaskService(InMemoryTaskRepository())
+
+
+class TaskCreate(BaseModel):
+    title: str | None = None
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    done: bool | None = None
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(_: Request, exc: RequestValidationError):
+    first = exc.errors()[0]
+    field = ".".join(str(p) for p in first["loc"] if p != "body") or "body"
+    return JSONResponse(status_code=400, content={"error": f"Invalid '{field}': {first['msg']}"})
+
+
+@app.exception_handler(ValidationError)
+async def service_validation_error(_: Request, exc: ValidationError):
+    return JSONResponse(status_code=400, content={"error": str(exc)})
+
+
+def not_found(task_id: int) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"error": f"Task {task_id} not found"})
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/tasks")
+def list_tasks():
+    return service.list()
+
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: int):
+    return service.get(task_id) or not_found(task_id)
+
+
+@app.post("/tasks", status_code=201)
+def create_task(body: TaskCreate):
+    return service.create(body.title)
+
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, body: TaskUpdate):
+    return service.update(task_id, body.title, body.done) or not_found(task_id)
+
+
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: int):
+    if not service.delete(task_id):
+        return not_found(task_id)
+    return Response(status_code=204)

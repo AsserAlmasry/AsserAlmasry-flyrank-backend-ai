@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="Task API", version="1.0")
@@ -15,6 +15,11 @@ tasks = [
 
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1)
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1)
+    done: bool | None = None
 
 
 @app.exception_handler(RequestValidationError)
@@ -64,3 +69,28 @@ def create_task(body: TaskCreate):
     task = {"id": next_id, "title": body.title.strip(), "done": False}
     tasks.append(task)
     return task
+
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, body: TaskUpdate):
+    task = find_task(task_id)
+    if task is None:
+        return not_found(task_id)
+    if body.title is None and body.done is None:
+        return JSONResponse(status_code=400, content={"error": "send at least one of: title, done"})
+    if body.title is not None:
+        if not body.title.strip():
+            return JSONResponse(status_code=400, content={"error": "title must not be empty"})
+        task["title"] = body.title.strip()
+    if body.done is not None:
+        task["done"] = body.done
+    return task
+
+
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: int):
+    task = find_task(task_id)
+    if task is None:
+        return not_found(task_id)
+    tasks.remove(task)
+    return Response(status_code=204)

@@ -40,6 +40,7 @@ def report_data(days: int = 7) -> dict:
 
 CSS = """
 @page { size: A4; margin: 16mm 13mm 18mm; }
+* { box-sizing: border-box; }
 body { font-family: Helvetica, Arial, sans-serif; color: #18202e; font-size: 10.5px; margin: 0; }
 h1 { color: #0e7490; font-size: 22px; margin: 0; } .sub { color: #5b6475; margin: 2px 0 14px; }
 h2 { color: #0e7490; font-size: 13px; margin: 18px 0 6px; break-after: avoid; }

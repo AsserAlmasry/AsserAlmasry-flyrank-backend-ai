@@ -1,7 +1,6 @@
 """Bookstore PDF reports: query -> render -> store -> serve by link."""
 import asyncio
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
@@ -77,6 +76,14 @@ async def create_report(body: ReportRequest | None = None):
     return to_json(row)
 
 
+@app.get("/reports")
+def list_reports():
+    """Extra: the control panel, every generated report with its link."""
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM reports WHERE path != '' ORDER BY id DESC").fetchall()
+    return [to_json(r) for r in rows]
+
+
 @app.get("/reports/{report_id}")
 def get_report(report_id: int):
     with connect() as conn:
@@ -93,4 +100,5 @@ def get_report_file(report_id: int):
         row = conn.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
     if row is None or not row["path"] or not (BASE / row["path"]).exists():
         return JSONResponse(status_code=404, content={"error": f"Report {report_id} file not found"})
-    return FileResponse(BASE / row["path"], media_type="application/pdf", filename=Path(row["path"]).name)
+    nice_name = f"bookstore-report-{row['report_date']}-{row['id']}.pdf"  # extra: a professional download name
+    return FileResponse(BASE / row["path"], media_type="application/pdf", filename=nice_name)

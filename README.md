@@ -13,5 +13,6 @@ One folder per assignment. Every folder has its own README with run instructions
 | A8 | PDF report generator | [`07-pdf-report`](07-pdf-report) |
 | A17 | Put an LLM behind your API | [`08-llm-endpoint`](08-llm-endpoint) |
 | BE-09 | AI Decision Flow with React Flow + Inngest | [`09-ai-decision-flow`](09-ai-decision-flow) |
+| **Capstone** | **Your 10x Solution: ShelfWatch**, a competitor price & stock monitor | [`capstone-shelfwatch`](capstone-shelfwatch) |
 
 Lane: **Python 3.10+ / FastAPI** for the backend assignments, **Next.js + React Flow** for BE-09.

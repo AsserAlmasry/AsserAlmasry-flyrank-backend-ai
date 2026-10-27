@@ -1,22 +1,36 @@
 import os
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
-from ..llm.client import make_client, model_name
-from ..llm.prompt import system_prompt, user_message
+from ..llm.client import LLMConfigError, LLMTimeout, LLMUnavailable
+from ..llm.enrich import Unrepairable, enrich as run_enrich
 from ..llm.schema import STUB_ANSWER, EnrichInput, EnrichOutput
 
 router = APIRouter()
 
 
-@router.post("/enrich")
+def error(status: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"error": code, "message": message})
+
+
+@router.post("/enrich", response_model=EnrichOutput,
+             responses={400: {"description": "Invalid input (field named)"},
+                        422: {"description": "Model answer failed the schema, even after one repair"},
+                        502: {"description": "Provider config error (bad key / model)"},
+                        503: {"description": "Provider unavailable"},
+                        504: {"description": "Model timed out"}})
 def enrich(body: EnrichInput):
     if os.getenv("LLM_STUB") == "1":
         return STUB_ANSWER  # build and debug without spending a single model call
-    res = make_client().chat.completions.create(
-        model=model_name(),
-        temperature=0,  # same input -> same answer; this is classification, not creative writing
-        messages=[{"role": "system", "content": system_prompt()},
-                  {"role": "user", "content": user_message(body.title, body.description)}],
-    )
-    return {"raw": res.choices[0].message.content}  # Stage 2 only: raw text, made trustworthy in Stage 3
+    try:
+        return run_enrich(body)  # always a validated EnrichOutput: raw model text never reaches the caller
+    except Unrepairable as exc:
+        return error(422, "unprocessable_model_output",
+                     f"The model's answer did not match the schema after one repair attempt ({exc}).")
+    except LLMTimeout as exc:
+        return error(504, "model_timeout", str(exc))
+    except LLMUnavailable as exc:
+        return error(503, "model_unavailable", str(exc))
+    except LLMConfigError as exc:
+        return error(502, "model_config_error", str(exc))

@@ -1,5 +1,5 @@
-import { FlowEditor } from "@/components/flow/flow-editor";
+import { FlowClient } from "./flow-client";
 
 export default function Home() {
-  return <FlowEditor />;
+  return <FlowClient />;
 }

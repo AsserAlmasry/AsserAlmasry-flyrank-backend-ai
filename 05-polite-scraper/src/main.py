@@ -1,8 +1,9 @@
 """The polite scraper. Run from this folder with:  python -m src.main"""
+import json
 from pathlib import Path
 
 from .fetch import Fetcher
-from .parse import parse_catalogue
+from .parse import parse_book, parse_catalogue
 
 BASE = Path(__file__).resolve().parent.parent
 START_URL = "https://books.toscrape.com/catalogue/page-1.html"
@@ -23,9 +24,21 @@ def discover(fetcher: Fetcher) -> tuple[list[tuple[str, str]], int]:
 def main() -> None:
     fetcher = Fetcher(BASE / "cache")
     found, pages = discover(fetcher)
-    unique = list(dict.fromkeys(url for url, _ in found))  # de-duplicate, keep order
-    print(f"catalogue_pages={pages} discovered={len(found)} unique_urls={len(unique)} "
-          f"(fetched={fetcher.stats['pages_fetched']} cache_hits={fetcher.stats['cache_hits']})")
+    sources = dict(reversed(found))  # url -> first catalogue page it appeared on
+    unique = list(dict.fromkeys(url for url, _ in found))
+    print(f"catalogue_pages={pages} discovered={len(found)} unique_urls={len(unique)}")
+
+    raw_records = []
+    for url in unique:
+        page = fetcher.get(url)
+        raw = {"title": None, "product_url": url}
+        raw.update(parse_book(page.html))
+        raw.update(source_page=sources[url], fetched_at=page.fetched_at)
+        raw_records.append({k: raw[k] for k in ("title", "product_url", "price_text", "availability_text",
+                                                  "rating_text", "description", "source_page", "fetched_at")})
+    print(json.dumps(raw_records[0], indent=2, ensure_ascii=False)[:900])
+    print(f"detail_pages={len(raw_records)} (fetched={fetcher.stats['pages_fetched']} "
+          f"cache_hits={fetcher.stats['cache_hits']})")
 
 
 if __name__ == "__main__":

@@ -79,3 +79,25 @@ def login(body: Credentials):
         "token_type": "bearer",
         "expires_in": session.expires_in,
     }
+
+
+def extract_bearer_token(request: Request) -> str | None:
+    """Return the token from 'Authorization: Bearer <token>', or None if missing/malformed."""
+    header = request.headers.get("Authorization", "")
+    scheme, _, token = header.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return token.strip()
+
+
+@app.get("/public/info")
+def public_info():
+    return {"message": "Welcome stranger! This info is public."}
+
+
+@app.get("/protected/profile")
+def profile(request: Request):
+    token = extract_bearer_token(request)
+    if token is None:
+        return error(401, "Access token required")
+    return {"message": "Token received (not verified yet)"}

@@ -2,7 +2,10 @@
 import json
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .fetch import Fetcher
+from .models import Book, normalize
 from .parse import parse_book, parse_catalogue
 
 BASE = Path(__file__).resolve().parent.parent
@@ -36,9 +39,30 @@ def main() -> None:
         raw.update(source_page=sources[url], fetched_at=page.fetched_at)
         raw_records.append({k: raw[k] for k in ("title", "product_url", "price_text", "availability_text",
                                                   "rating_text", "description", "source_page", "fetched_at")})
-    print(json.dumps(raw_records[0], indent=2, ensure_ascii=False)[:900])
-    print(f"detail_pages={len(raw_records)} (fetched={fetcher.stats['pages_fetched']} "
-          f"cache_hits={fetcher.stats['cache_hits']})")
+    print(f"detail_pages={len(raw_records)}")
+
+    books: dict[str, dict] = {}  # keyed by canonical URL -> a rerun can never create duplicates
+    errors = []
+    for raw in raw_records:
+        try:
+            book = Book(**normalize(raw))
+        except ValidationError as exc:
+            errors.append({"product_url": raw.get("product_url"), "reason": exc.errors(include_url=False),
+                           "raw": raw})
+            continue
+        books[book.product_url] = book.model_dump(mode="json")
+
+    out = BASE / "output"
+    out.mkdir(exist_ok=True)
+    write_json(out / "books.json", list(books.values()))
+    write_json(out / "errors.json", errors)
+    print(f"valid={len(books)} invalid={len(errors)} -> output/books.json")
+
+
+def write_json(path: Path, data) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), "utf-8")
+    tmp.replace(path)  # atomic: a crash mid-write never leaves a half-written books.json
 
 
 if __name__ == "__main__":

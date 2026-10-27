@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import requests
 
-USER_AGENT = "FlyRankInternshipA9/1.0 (+https://github.com/AsserAlmasry/flyrank-backend-ai)"
+USER_AGENT = "ShelfWatch/1.0 (FlyRank capstone; +https://github.com/AsserAlmasry/flyrank-backend-ai)"
 TIMEOUT_S = 10
 MIN_DELAY_S = 1.0  # brief says >= 0.5 s; we go slower to be extra polite
 RETRY_WAIT_S = 3.0  # one retry, only for timeouts / network errors / 5xx
@@ -32,6 +32,7 @@ class Page:
 @dataclass
 class Fetcher:
     cache_dir: Path
+    max_age_hours: float | None = None  # None = cache forever (dev); a number = refetch pages older than that
     stats: dict = field(default_factory=lambda: {"pages_fetched": 0, "cache_hits": 0})
     _last_request: float = 0.0
 
@@ -49,7 +50,7 @@ class Fetcher:
     def get(self, url: str, cache_name: str | None = None) -> Page:
         path = self.cache_path(url, cache_name)
         meta = path.with_suffix(".meta.json")
-        if path.exists() and meta.exists():
+        if path.exists() and meta.exists() and self._fresh(meta):
             self.stats["cache_hits"] += 1
             return Page(url, path.read_text("utf-8"), json.loads(meta.read_text())["fetched_at"], True)
         try:
@@ -63,6 +64,12 @@ class Fetcher:
             self.stats["retries"] = self.stats.get("retries", 0) + 1
             time.sleep(RETRY_WAIT_S)
             return self._fetch(url, path, meta)
+
+    def _fresh(self, meta: Path) -> bool:
+        if self.max_age_hours is None:
+            return True
+        fetched = datetime.fromisoformat(json.loads(meta.read_text())["fetched_at"].replace("Z", "+00:00"))
+        return (datetime.now(timezone.utc) - fetched).total_seconds() < self.max_age_hours * 3600
 
     def _fetch(self, url: str, path: Path, meta: Path) -> Page:
         wait = MIN_DELAY_S - (time.monotonic() - self._last_request)

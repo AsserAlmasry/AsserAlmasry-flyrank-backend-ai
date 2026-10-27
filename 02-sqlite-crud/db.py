@@ -26,3 +26,21 @@ def init_db() -> None:
         (count,) = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()
         if count == 0:
             conn.executemany("INSERT INTO tasks (title, done) VALUES (?, ?)", SEED)
+
+
+def row_to_task(row: sqlite3.Row) -> dict:
+    return {"id": row["id"], "title": row["title"], "done": bool(row["done"])}
+
+
+class TaskRepository:
+    """All SQL for tasks. The routes only ever call these methods."""
+
+    def list(self) -> list[dict]:
+        with connect() as conn:
+            rows = conn.execute("SELECT id, title, done FROM tasks ORDER BY id").fetchall()
+        return [row_to_task(r) for r in rows]
+
+    def get(self, task_id: int) -> dict | None:
+        with connect() as conn:
+            row = conn.execute("SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        return row_to_task(row) if row else None

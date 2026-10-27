@@ -5,11 +5,25 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+from dotenv import load_dotenv
+
 from .repository import InMemoryTaskRepository
 from .service import TaskService, ValidationError
 
-app = FastAPI(title="Task API (in-memory)", version="3.0")
-service = TaskService(InMemoryTaskRepository())
+load_dotenv()  # reads .env when running outside Docker; compose passes the same vars in
+
+
+def build_repository():
+    """The ONLY place that knows which storage we use."""
+    if os.getenv("STORAGE", "postgres") == "memory":
+        return InMemoryTaskRepository()
+    from .postgres_repository import PostgresTaskRepository
+    return PostgresTaskRepository(os.environ["DATABASE_URL"])
+
+
+repo = build_repository()
+app = FastAPI(title="Task API (Postgres)", version="3.0")
+service = TaskService(repo)
 
 
 class TaskCreate(BaseModel):

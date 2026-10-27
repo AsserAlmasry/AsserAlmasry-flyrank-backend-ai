@@ -1,0 +1,17 @@
+--- BEFORE the index ---
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Seq Scan on tasks_bench  (cost=0.00..3971.00 rows=1 width=31) (actual time=10.592..17.067 rows=1 loops=1)
+   Filter: (title = 'task number 123456'::text)
+   Rows Removed by Filter: 199999
+ Planning Time: 0.201 ms
+ Execution Time: 17.083 ms
+(5 rows)
+--- AFTER the index ---
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_tasks_bench_title on tasks_bench  (cost=0.42..8.44 rows=1 width=31) (actual time=0.040..0.042 rows=1 loops=1)
+   Index Cond: (title = 'task number 123456'::text)
+ Planning Time: 0.273 ms
+ Execution Time: 0.064 ms
+(4 rows)

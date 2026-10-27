@@ -53,7 +53,15 @@ def not_found(task_id: int) -> JSONResponse:
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    status = {"status": "ok", "storage": type(repo).__name__}
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:  # stretch: prove the app can reach Redis
+        import redis
+        try:
+            status["redis"] = "PONG" if redis.Redis.from_url(redis_url, socket_timeout=2).ping() else "no reply"
+        except redis.RedisError as exc:
+            status["redis"] = f"error: {exc}"
+    return status
 
 
 @app.get("/tasks")

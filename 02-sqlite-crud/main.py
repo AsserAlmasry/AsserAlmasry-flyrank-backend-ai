@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -36,8 +38,13 @@ def health():
 
 
 @app.get("/tasks")
-def list_tasks():
-    return repo.list()
+def list_tasks(done: bool | None = None, search: str | None = None, sort: Literal["id", "title"] = "id"):
+    return repo.list(done=done, search=search, sort=sort)
+
+
+@app.get("/stats")
+def stats():
+    return repo.stats()
 
 
 @app.get("/tasks/{task_id}")

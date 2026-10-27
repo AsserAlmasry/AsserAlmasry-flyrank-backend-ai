@@ -35,10 +35,24 @@ def row_to_task(row: sqlite3.Row) -> dict:
 class TaskRepository:
     """All SQL for tasks. The routes only ever call these methods."""
 
-    def list(self) -> list[dict]:
+    def list(self, done: bool | None = None, search: str | None = None, sort: str = "id") -> list[dict]:
+        sql, params = "SELECT id, title, done FROM tasks WHERE 1 = 1", []
+        if done is not None:  # extra: filter with a SQL WHERE clause
+            sql += " AND done = ?"
+            params.append(int(done))
+        if search:  # extra: search with SQL LIKE (parameterised, so no SQL injection)
+            sql += " AND title LIKE ?"
+            params.append(f"%{search}%")
+        sql += " ORDER BY title COLLATE NOCASE" if sort == "title" else " ORDER BY id"
         with connect() as conn:
-            rows = conn.execute("SELECT id, title, done FROM tasks ORDER BY id").fetchall()
+            rows = conn.execute(sql, params).fetchall()
         return [row_to_task(r) for r in rows]
+
+    def stats(self) -> dict:
+        """Extra: let SQL do the counting instead of Python."""
+        with connect() as conn:
+            total, done = conn.execute("SELECT COUNT(*), COALESCE(SUM(done), 0) FROM tasks").fetchone()
+        return {"total": total, "done": done, "open": total - done}
 
     def get(self, task_id: int) -> dict | None:
         with connect() as conn:

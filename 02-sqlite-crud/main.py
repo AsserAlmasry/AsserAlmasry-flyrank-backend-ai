@@ -44,3 +44,14 @@ def list_tasks():
 def get_task(task_id: int):
     task = repo.get(task_id)
     return task if task else not_found(task_id)
+
+
+class TaskCreate(BaseModel):
+    title: str = Field(min_length=1)
+
+
+@app.post("/tasks", status_code=201)
+def create_task(body: TaskCreate):
+    if not body.title.strip():
+        return bad_request("title must not be empty")
+    return repo.create(body.title.strip())

@@ -44,3 +44,9 @@ class TaskRepository:
         with connect() as conn:
             row = conn.execute("SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return row_to_task(row) if row else None
+
+    def create(self, title: str) -> dict:
+        with connect() as conn:
+            cur = conn.execute("INSERT INTO tasks (title, done) VALUES (?, 0)", (title,))
+            new_id = cur.lastrowid
+        return self.get(new_id)
